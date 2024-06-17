@@ -23,7 +23,7 @@ location_lon = -112.4685  # Prescott, Arizona longitude
 year = 2024
 month = 6
 day = 25
-hour = 3
+hour = 3 #24hr format
 minute = 00
 
 # Find all visible planets at the specified datetime and location
