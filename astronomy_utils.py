@@ -1,14 +1,14 @@
-# astronomy_utils.py
-
 from skyfield.api import Topos, load
 from skyfield.almanac import find_discrete, risings_and_settings
 from datetime import datetime, timedelta
 import pytz
 from timezonefinder import TimezoneFinder
+import matplotlib.pyplot as plt
 
 # Mapping of user-friendly planet names to their Skyfield barycenter names
 planet_name_mapping = {
     'sun': 'sun',
+    'moon': 'moon',
     'mercury': 'mercury barycenter',
     'venus': 'venus barycenter',
     'earth': 'earth barycenter',
@@ -64,15 +64,11 @@ def find_visible_planets(location_lat, location_lon, year, month, day, hour, min
     else:
         raise ValueError("Could not determine timezone for the given coordinates.")
 
-    # Create a datetime object in local time
-    local_time = datetime(year, month, day, hour, minute)
-
-    # Check if the timezone has DST and adjust accordingly
-    if tz.localize(local_time).dst():
-        local_time = local_time - tz.localize(local_time).dst()
+    # Create a datetime object in local time and localize it
+    local_time = tz.localize(datetime(year, month, day, hour, minute))
 
     # Convert local time to UTC
-    utc_time = tz.localize(local_time).astimezone(pytz.utc)
+    utc_time = local_time.astimezone(pytz.utc)
 
     # Convert UTC time to Skyfield's timescale
     ts = load.timescale()
@@ -138,7 +134,20 @@ def _calculate_planet_visibility_period(location_lat, location_lon, start_date, 
     planets = load('de421.bsp')
     ts = load.timescale()
     location = Topos(latitude_degrees=location_lat, longitude_degrees=location_lon)
-    tz = pytz.timezone('MST')
+
+    # Determine timezone automatically based on coordinates
+    tf = TimezoneFinder()
+    timezone_str = tf.timezone_at(lng=location_lon, lat=location_lat)
+
+    if timezone_str:
+        tz = pytz.timezone(timezone_str)
+    else:
+        raise ValueError("Could not determine timezone for the given coordinates.")
+
+    # Ensure start_date is naive before localizing
+    if start_date.tzinfo is not None:
+        start_date = start_date.replace(tzinfo=None)
+
     start_date = tz.localize(start_date)
     start_time = ts.utc(start_date.astimezone(pytz.utc))
     end_time = ts.utc((start_date + timedelta(days=30)).astimezone(pytz.utc))
@@ -193,3 +202,98 @@ def _format_visibility_message(rise_time, direction, azimuth, duration, max_alt,
         f"maximum altitude of ~{max_alt:.2f} degrees, set on {set_time_formatted}."
     )
     return formatted_message
+
+def draw_planet_motion(location_lat, location_lon, planet_name, year, month, day):
+    """
+    Draws a PNG image of the motion of a planetary body.
+
+    Parameters:
+    - location_lat (float): Latitude of the observer's location in degrees.
+    - location_lon (float): Longitude of the observer's location in degrees.
+    - planet_name (str): Name of the planetary body.
+    - year (int): Year of the observation.
+    - month (int): Month of the observation (1-12).
+    - day (int): Day of the month of the observation (1-31).
+    """
+    planets = load('de421.bsp')
+    ts = load.timescale()
+    location = Topos(latitude_degrees=location_lat, longitude_degrees=location_lon)
+
+    # Determine timezone automatically based on coordinates
+    tf = TimezoneFinder()
+    timezone_str = tf.timezone_at(lng=location_lon, lat=location_lat)
+
+    if timezone_str:
+        tz = pytz.timezone(timezone_str)
+    else:
+        raise ValueError("Could not determine timezone for the given coordinates.")
+
+    # Create a datetime object in local time and localize it
+    local_date = datetime(year, month, day)
+    start_date = tz.localize(local_date)
+
+    start_time = ts.utc(start_date.astimezone(pytz.utc))
+    end_time = ts.utc((start_date + timedelta(days=2)).astimezone(pytz.utc))  # Extended to 2 days
+    planet = planets[planet_name_mapping[planet_name.lower()]]
+
+    f = risings_and_settings(planets, planet, location)
+    times, is_rise = find_discrete(start_time, end_time, f)
+
+    if len(times) < 2:
+        print("The planet does not rise and set within the specified date range.")
+        return
+
+    rise_time = None
+    set_time = None
+
+    for i in range(len(times) - 1):
+        if is_rise[i] and not is_rise[i + 1]:
+            rise_time = times[i]
+            set_time = times[i + 1]
+            break
+
+    if rise_time is None or set_time is None:
+        print("The planet does not rise and set within the specified date range.")
+        return
+
+    observer = planets['earth'] + location
+
+    time_interval = timedelta(hours=1)
+    times_list = [rise_time.utc_datetime() + i * time_interval for i in range(int((set_time.utc_datetime() - rise_time.utc_datetime()).total_seconds() // 3600) + 1)]
+
+    altitudes = []
+    azimuths = []
+
+    for time in times_list:
+        t = ts.utc(time)
+        alt, az, _ = observer.at(t).observe(planet).apparent().altaz()
+        altitudes.append(alt.degrees)
+        azimuths.append(az.degrees)
+
+    fig, ax = plt.subplots()
+
+    # Plot horizon
+    ax.plot([azimuths[0], azimuths[-1]], [0, 0], 'k-')
+    ax.text(azimuths[0], -2, f'{format_direction(azimuths[0])} ({(times_list[0].astimezone(tz)).strftime("%Y-%m-%d")})', horizontalalignment='center')
+    ax.text(azimuths[-1], -2, f'{format_direction(azimuths[-1])} ({(times_list[-1].astimezone(tz)).strftime("%Y-%m-%d")})', horizontalalignment='center')
+
+    # Plot the motion of the planet
+    ax.plot(azimuths, altitudes, 'b-')
+    ax.scatter(azimuths, altitudes, color='red')
+
+    for i, time in enumerate(times_list):
+        local_time = time.astimezone(tz)
+        ax.text(azimuths[i], altitudes[i], local_time.strftime('%H:%M'), fontsize=8, verticalalignment='bottom', horizontalalignment='right')
+
+    ax.set_xlabel('Azimuth (degrees)')
+    ax.set_ylabel('Altitude (degrees)')
+    ax.set_title(f'Motion of {planet_name.capitalize()} on {start_date.strftime("%Y-%m-%d")} and {(start_date + timedelta(days=1)).strftime("%Y-%m-%d")}')
+    ax.set_ylim(bottom=-5)
+
+    plt.savefig(f'{planet_name}_motion.png')
+    plt.close()
+
+    print(f"The motion of {planet_name.capitalize()} has been saved as '{planet_name}_motion.png'.")
+
+
+
