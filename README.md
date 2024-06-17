@@ -5,7 +5,7 @@ This guide provides instructions on how to use the functions available in the `a
 ## Requirements
 
 ```python
-pip install skyfield pytz timezonefinder
+pip install -r requirements.txt
 ```
 
 ## Finding Visible Planets
@@ -23,7 +23,7 @@ location_lon = -112.4685  # Prescott, Arizona longitude
 year = 2024
 month = 6
 day = 25
-hour = 3
+hour = 3 #24hr format
 minute = 00
 
 # Find all visible planets at the specified datetime and location
