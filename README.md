@@ -5,7 +5,7 @@ This guide provides instructions on how to use the functions available in the `a
 ## Requirements
 
 ```python
-pip install skyfield pytz timezonefinder
+ pip install -r requirements.txt
 ```
 
 ## Finding Visible Planets
