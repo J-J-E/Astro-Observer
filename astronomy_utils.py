@@ -203,6 +203,7 @@ def _format_visibility_message(rise_time, direction, azimuth, duration, max_alt,
     )
     return formatted_message
 
+
 def draw_planet_motion(location_lat, location_lon, planet_name, year, month, day):
     """
     Draws a PNG image of the motion of a planetary body.
@@ -258,8 +259,17 @@ def draw_planet_motion(location_lat, location_lon, planet_name, year, month, day
 
     observer = planets['earth'] + location
 
+    # Include exact rise and set times
+    times_list = [rise_time.utc_datetime()]
     time_interval = timedelta(hours=1)
-    times_list = [rise_time.utc_datetime() + i * time_interval for i in range(int((set_time.utc_datetime() - rise_time.utc_datetime()).total_seconds() // 3600) + 1)]
+    current_time = rise_time.utc_datetime() + time_interval
+
+    while current_time < set_time.utc_datetime():
+        times_list.append(current_time)
+        current_time += time_interval
+
+    # Ensure set time is included in the list
+    times_list.append(set_time.utc_datetime())
 
     altitudes = []
     azimuths = []
@@ -274,8 +284,11 @@ def draw_planet_motion(location_lat, location_lon, planet_name, year, month, day
 
     # Plot horizon
     ax.plot([azimuths[0], azimuths[-1]], [0, 0], 'k-')
-    ax.text(azimuths[0], -2, f'{format_direction(azimuths[0])} ({(times_list[0].astimezone(tz)).strftime("%Y-%m-%d")})', horizontalalignment='center')
-    ax.text(azimuths[-1], -2, f'{format_direction(azimuths[-1])} ({(times_list[-1].astimezone(tz)).strftime("%Y-%m-%d")})', horizontalalignment='center')
+    ax.text(azimuths[0], -2, f'{format_direction(azimuths[0])} ({(times_list[0].astimezone(tz)).strftime("%Y-%m-%d")})',
+            horizontalalignment='center')
+    ax.text(azimuths[-1], -2,
+            f'{format_direction(azimuths[-1])} ({(times_list[-1].astimezone(tz)).strftime("%Y-%m-%d")})',
+            horizontalalignment='center')
 
     # Plot the motion of the planet
     ax.plot(azimuths, altitudes, 'b-')
@@ -283,17 +296,18 @@ def draw_planet_motion(location_lat, location_lon, planet_name, year, month, day
 
     for i, time in enumerate(times_list):
         local_time = time.astimezone(tz)
-        ax.text(azimuths[i], altitudes[i], local_time.strftime('%H:%M'), fontsize=8, verticalalignment='bottom', horizontalalignment='right')
+        ax.text(azimuths[i], altitudes[i], local_time.strftime('%H:%M'), fontsize=8, verticalalignment='bottom',
+                horizontalalignment='right')
 
     ax.set_xlabel('Azimuth (degrees)')
     ax.set_ylabel('Altitude (degrees)')
-    ax.set_title(f'Motion of {planet_name.capitalize()} on {start_date.strftime("%Y-%m-%d")} and {(start_date + timedelta(days=1)).strftime("%Y-%m-%d")}')
+    ax.set_title(
+        f'Motion of {planet_name.capitalize()} on {start_date.strftime("%Y-%m-%d")} and {(start_date + timedelta(days=1)).strftime("%Y-%m-%d")}')
     ax.set_ylim(bottom=-5)
 
     plt.savefig(f'{planet_name}_motion.png')
     plt.close()
 
     print(f"The motion of {planet_name.capitalize()} has been saved as '{planet_name}_motion.png'.")
-
 
 
