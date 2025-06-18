@@ -1,8 +1,8 @@
 from astronomy_utils import get_planet_visibility
 
 # Example to find next occurrence of specific body
-location_lat = 34.5400  # Prescott, Arizona latitude
-location_lon = -112.4685  # Prescott, Arizona longitude
+location_lat = 32.23181639440093
+location_lon = -110.95347633006848
 planet_name = 'saturn'
 number_of_occurrences = 5
 
